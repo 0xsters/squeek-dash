@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Squeek Dash: race the hamster's real wheel</title>
+<meta name="description" content="A one-button runner game paced by Squeektoshi's real wheel on Squeekchain. When he zooms, the game zooms. When he naps, the game slows down.">
+<style>
+  :root{
+    color-scheme: light;
+    --paper:#fdf6e3; --paper2:#f7ead0; --ink:#2b2118; --ink2:#6b5b45;
+    --accent:#e8710a; --accent2:#ffb020; --good:#2e7d32; --bad:#b3261e;
+    --card:#fffaf0; --line:#e3d3ae;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:var(--paper);
+    background-image:radial-gradient(var(--paper2) 1px, transparent 1px);
+    background-size:22px 22px;
+    color:var(--ink);
+    font-family:ui-rounded, "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+  }
+  header{width:100%; max-width:860px; padding:18px 16px 6px; text-align:center;}
+  h1{margin:0; font-size:clamp(28px, 6vw, 44px); letter-spacing:.5px;}
+  h1 .dash{color:var(--accent);}
+  .tag{margin:6px auto 0; max-width:560px; color:var(--ink2); font-size:15px; line-height:1.45;}
+  main{width:100%; max-width:860px; padding:10px 16px 0; flex:1;}
+  .hud{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:10px;
+  }
+  .chip{
+    background:var(--card); border:2px solid var(--line); border-radius:999px;
+    padding:6px 14px; font-size:14px; font-weight:600; white-space:nowrap;
+  }
+  .chip b{color:var(--accent);}
+  .chip.status-live{border-color:var(--good); color:var(--good);}
+  .chip.status-nap{border-color:var(--ink2); color:var(--ink2);}
+  .stage{
+    position:relative; background:linear-gradient(#ffeec2, #fdf6e3 70%);
+    border:3px solid var(--ink); border-radius:18px; overflow:hidden;
+    box-shadow:0 6px 0 rgba(43,33,24,.18);
+  }
+  canvas{display:block; width:100%; height:auto; touch-action:none;}
+  .overlay{
+    position:absolute; inset:0; display:flex; flex-direction:column; gap:10px;
+    align-items:center; justify-content:flex-start; text-align:center; padding:20px;
+    background:rgba(253,246,227,.88); overflow-y:auto;
+  }
+  .overlay > *:first-child{margin-top:auto;}
+  .overlay > *:last-child{margin-bottom:auto;}
+  @media (max-width:520px){
+    .overlay{position:fixed; z-index:50; gap:9px; padding:20px; background:var(--paper);}
+    .overlay h2{font-size:24px;}
+    .overlay p{font-size:14.5px; line-height:1.45;}
+  }
+  .overlay h2{margin:0; font-size:clamp(22px,5vw,32px);}
+  .overlay p{margin:0; max-width:440px; color:var(--ink2); line-height:1.5; font-size:15px;}
+  .bigbtn{
+    background:var(--accent); color:#fff; border:3px solid var(--ink); border-radius:999px;
+    font-size:18px; font-weight:800; padding:12px 30px; cursor:pointer;
+    box-shadow:0 4px 0 rgba(43,33,24,.35); font-family:inherit;
+  }
+  .bigbtn:active{transform:translateY(2px); box-shadow:0 2px 0 rgba(43,33,24,.35);}
+  .hidden{display:none !important;}
+  .racebar{margin:12px 2px 0;}
+  .racebar .row{display:flex; align-items:center; gap:8px; margin-top:6px; font-size:13px; font-weight:700;}
+  .racebar .label{width:86px; flex:none; text-align:right; color:var(--ink2);}
+  .racebar .track{flex:1; background:var(--paper2); border:2px solid var(--line); border-radius:999px; height:16px; overflow:hidden;}
+  .racebar .fill{height:100%; width:0%; border-radius:999px; transition:width .3s linear;}
+  .fill.you{background:var(--accent);}
+  .fill.him{background:var(--accent2);}
+  .racebar .val{width:64px; flex:none;}
+  .howto{
+    margin:16px auto 0; max-width:860px; background:var(--card);
+    border:2px solid var(--line); border-radius:14px; padding:14px 18px; line-height:1.55; font-size:15px;
+  }
+  .howto h3{margin:0 0 6px; font-size:16px;}
+  .howto ul{margin:6px 0 0; padding-left:20px;}
+  footer{
+    width:100%; max-width:860px; padding:16px; color:var(--ink2); font-size:13px;
+    text-align:center; line-height:1.6;
+  }
+  footer a{color:var(--accent); font-weight:700; text-decoration:none;}
+  kbd{
+    background:var(--ink); color:var(--paper); border-radius:6px; padding:1px 8px;
+    font-family:inherit; font-size:13px; font-weight:700;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>SQUEEK <span class="dash">DASH</span> 🐹</h1>
+  <p class="tag">A one-button runner paced by a real hamster. The game reads Squeektoshi's live wheel on Squeekchain: when he zooms, your world speeds up. When he naps, everything slows down.</p>
+</header>
+<main>
+  <div class="hud">
+    <span class="chip" id="statusChip">📡 connecting to the wheel…</span>
+    <span class="chip">You <b id="hudYou">0 m</b></span>
+    <span class="chip">Squeektoshi <b id="hudHim">0 m</b></span>
+    <span class="chip">Best <b id="hudBest">0 m</b></span>
+    <span class="chip">Block <b id="hudBlock">…</b></span>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="game" width="820" height="420"></canvas>
+    <div class="overlay" id="startOverlay">
+      <h2>Ready to race a hamster?</h2>
+      <p>Press <kbd>SPACE</kbd> or tap to jump the seed shells and bottles. Your speed is set by Squeektoshi's real rim speed, read live from Squeekchain. Outrun his distance before you trip.</p>
+      <button class="bigbtn" id="startBtn">Start running</button>
+      <p id="startStatus">Reading the wheel…</p>
+    </div>
+    <div class="overlay hidden" id="overOverlay">
+      <h2 id="overTitle">Tripped!</h2>
+      <p id="overText"></p>
+      <button class="bigbtn" id="againBtn">Run again</button>
+    </div>
+  </div>
+
+  <div class="racebar" aria-label="Race progress">
+    <div class="row"><span class="label">YOU</span><div class="track"><div class="fill you" id="barYou"></div></div><span class="val" id="valYou">0 m</span></div>
+    <div class="row"><span class="label">SQUEEKTOSHI</span><div class="track"><div class="fill him" id="barHim"></div></div><span class="val" id="valHim">0 m</span></div>
+  </div>
+
+  <section class="howto">
+    <h3>How it works</h3>
+    <ul>
+      <li>Every few seconds the game reads the public Squeekchain status API: wheel state, RPM, rim speed in millimetres per second, and the current Squeek block height.</li>
+      <li>His rim speed sets your world speed. A sleeping hamster means a gentle jog, a hamster at full zoomies means you had better be awake too.</li>
+      <li>The wheel in the corner spins at his real RPM. The race bars compare your distance with the distance his wheel covers during your run.</li>
+      <li>No wallet, no signup, no gas. Scores live only in your browser. If the signal drops, the game keeps the last pace and tells you.</li>
+    </ul>
+  </section>
+</main>
+<footer>
+  Fan-made game for <a href="https://squeekchain.com" target="_blank" rel="noopener">Squeekchain</a>. Test network only, these are bragging rights, not assets.
+  Data: api.squeekchain.com · <a href="https://sepolia.squeekchain.com/mint" target="_blank" rel="noopener">Claim test Squeeks</a> · <a href="https://squeekchain.com/genesis" target="_blank" rel="noopener">Join Genesis</a><br>
+  Not affiliated with the Squeekchain team. Built for the Genesis Code builder board.
+</footer>
+
+<script>
+"use strict";
+const API = "https://api.squeekchain.com/v1/status";
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const $ = id => document.getElementById(id);
+
+/* ---------- live hamster telemetry ---------- */
+const tele = {
+  status: "UNKNOWN",       // SPINNING | IDLE | ...
+  rpm: 0,                  // revolutions per minute (float)
+  speedMmS: 0,             // rim speed, mm per second
+  block: null,
+  fresh: false,            // have we ever had a good read?
+  stale: false,
+  lastOk: 0
+};
+
+async function poll(){
+  try{
+    const r = await fetch(API, {cache:"no-store"});
+    if(!r.ok) throw new Error("http " + r.status);
+    const j = await r.json();
+    const m = j.measurement || {};
+    tele.status = String(m.coreStatus || "UNKNOWN");
+    tele.rpm = (Number(m.rpmMilli) || 0) / 1000;
+    tele.speedMmS = Number(m.speedMmPerSecond) || 0;
+    const b = j.builder && j.builder.anchor && j.builder.anchor.blockHeight;
+    tele.block = b != null ? Number(b) : tele.block;
+    tele.fresh = true; tele.stale = false; tele.lastOk = Date.now();
+  }catch(e){
+    tele.stale = true;
+  }
+  renderStatus();
+}
+function renderStatus(){
+  const chip = $("statusChip");
+  if(!tele.fresh){
+    chip.textContent = "📡 waiting for the wheel signal…";
+    chip.className = "chip status-nap";
+    $("startStatus").textContent = "Still reading the wheel. You can start anyway, the pace catches up when the signal lands.";
+    return;
+  }
+  if(tele.status === "SPINNING"){
+    chip.textContent = "🔥 Squeektoshi is running: " + tele.rpm.toFixed(1) + " RPM";
+    chip.className = "chip status-live";
+    $("startStatus").textContent = "He is on the wheel right now at " + tele.rpm.toFixed(1) + " RPM. Expect a fast run.";
+  }else{
+    chip.textContent = "💤 Squeektoshi is napping";
+    chip.className = "chip status-nap";
+    $("startStatus").textContent = "He is asleep, so this run is a gentle jog. When he wakes up mid-run, the pace rises with him.";
+  }
+  if(tele.stale) chip.textContent += " (signal stale, keeping last pace)";
+  $("hudBlock").textContent = tele.block != null ? "#" + tele.block : "…";
+}
+poll();
+setInterval(poll, 8000);
+
+/* ---------- game state ---------- */
+const W = 820, H = 420, GROUND = H - 64;
+let running = false, over = false;
+let you = 0, him = 0, best = Number(localStorage.getItem("squeekdash-best") || 0);
+let speed = 250, wheelAngle = 0, tPrev = 0;
+const player = { x: 110, y: GROUND, vy: 0, r: 22, onGround: true, legPhase: 0 };
+let obstacles = [], spawnIn = 0, clouds = [], motes = [];
+for(let i = 0; i < 5; i++) clouds.push({x: Math.random()*W, y: 30 + Math.random()*90, s: .6 + Math.random()*.9});
+for(let i = 0; i < 26; i++) motes.push({x: Math.random()*W, y: Math.random()*GROUND, r: 1 + Math.random()*2});
+
+$("hudBest").textContent = best + " m";
+
+function targetSpeed(){
+  // His rim speed drives the world. Floor keeps a napping run playable.
+  const driven = 240 + Math.min(660, tele.speedMmS * 2.6);
+  return tele.status === "SPINNING" ? driven : 250;
+}
+function jump(){
+  if(!running) return;
+  if(player.onGround){ player.vy = -790; player.onGround = false; }
+}
+function start(){
+  you = 0; him = 0; obstacles = []; spawnIn = 320;
+  player.y = GROUND; player.vy = 0; player.onGround = true;
+  running = true; over = false;
+  $("startOverlay").classList.add("hidden");
+  $("overOverlay").classList.add("hidden");
+}
+function gameOver(){
+  running = false; over = true;
+  const youR = Math.floor(you), himR = Math.floor(him);
+  if(youR > best){ best = youR; localStorage.setItem("squeekdash-best", String(best)); $("hudBest").textContent = best + " m"; }
+  let verdict;
+  if(tele.status !== "SPINNING" && himR === 0) verdict = "He napped through your whole run. The rematch comes when he wakes up.";
+  else if(youR > himR) verdict = "You outran the hamster. Screenshot it, nobody will believe you.";
+  else if(youR === himR) verdict = "Dead heat with a hamster. Take the draw.";
+  else verdict = "He covered " + himR + " m in the same run. The wheel always wins eventually.";
+  $("overTitle").textContent = "Tripped at " + youR + " m";
+  $("overText").textContent = verdict;
+  $("overOverlay").classList.remove("hidden");
+}
+$("startBtn").addEventListener("click", start);
+$("againBtn").addEventListener("click", start);
+window.addEventListener("keydown", e => {
+  if(e.code === "Space" || e.code === "ArrowUp"){ e.preventDefault(); if(!running && !over) start(); else jump(); }
+});
+canvas.addEventListener("pointerdown", e => { e.preventDefault(); if(running) jump(); });
+
+function spawnObstacle(){
+  const kinds = ["seed", "bottle", "rock"];
+  const kind = kinds[Math.floor(Math.random()*kinds.length)];
+  const o = { x: W + 40, kind };
+  if(kind === "seed"){ o.w = 40; o.h = 24; }
+  if(kind === "bottle"){ o.w = 20; o.h = 52; }
+  if(kind === "rock"){ o.w = 34; o.h = 30; }
+  obstacles.push(o);
+}
+
+/* ---------- drawing ---------- */
+function drawWheel(x, y, r){
+  ctx.save(); ctx.translate(x, y);
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
+  ctx.fillStyle = "#fffaf0"; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = "#2b2118"; ctx.stroke();
+  ctx.rotate(wheelAngle);
+  ctx.lineWidth = 3; ctx.strokeStyle = "#e8710a";
+  for(let i = 0; i < 6; i++){
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(i*Math.PI/3)*r*.92, Math.sin(i*Math.PI/3)*r*.92); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fillStyle = "#2b2118"; ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = "#2b2118"; ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
+  if(tele.status === "SPINNING") ctx.fillText(tele.rpm.toFixed(1) + " RPM", x, y + r + 16);
+  else ctx.fillText("💤 napping", x, y + r + 16);
+}
+function drawPlayer(){
+  const bob = player.onGround ? Math.sin(player.legPhase) * 2.5 : 0;
+  const cx = player.x, cy = player.y - player.r + bob;
+  ctx.save(); ctx.translate(cx, cy);
+  // legs
+  ctx.strokeStyle = "#2b2118"; ctx.lineWidth = 4; ctx.lineCap = "round";
+  const lp = player.onGround ? Math.sin(player.legPhase) * 9 : 5;
+  ctx.beginPath(); ctx.moveTo(-6, player.r - 4); ctx.lineTo(-6 + lp, player.r + 6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(7, player.r - 4); ctx.lineTo(7 - lp, player.r + 6); ctx.stroke();
+  // body
+  ctx.beginPath(); ctx.arc(0, 0, player.r, 0, Math.PI*2);
+  ctx.fillStyle = "#ffb020"; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = "#2b2118"; ctx.stroke();
+  // ear
+  ctx.beginPath(); ctx.arc(-10, -player.r + 4, 7, 0, Math.PI*2);
+  ctx.fillStyle = "#ffb020"; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(-10, -player.r + 4, 3, 0, Math.PI*2); ctx.fillStyle = "#f28ba8"; ctx.fill();
+  // cheek pouch + eye
+  ctx.beginPath(); ctx.arc(10, 5, 8, 0, Math.PI*2); ctx.fillStyle = "#ffd97a"; ctx.fill();
+  ctx.beginPath(); ctx.arc(8, -5, 3.2, 0, Math.PI*2); ctx.fillStyle = "#2b2118"; ctx.fill();
+  ctx.restore();
+}
+function drawObstacle(o){
+  const base = GROUND + 26;
+  ctx.save(); ctx.translate(o.x, base);
+  ctx.lineWidth = 3; ctx.strokeStyle = "#2b2118";
+  if(o.kind === "seed"){
+    ctx.beginPath(); ctx.ellipse(0, -o.h/2, o.w/2, o.h/2, -.5, 0, Math.PI*2);
+    ctx.fillStyle = "#8a5a2b"; ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-o.w/3, -o.h/2 + 3); ctx.lineTo(o.w/3, -o.h/2 - 2); ctx.stroke();
+  }else if(o.kind === "bottle"){
+    ctx.beginPath();
+    ctx.moveTo(-o.w/2, 0); ctx.lineTo(-o.w/2, -o.h + 12); ctx.lineTo(-4, -o.h + 12);
+    ctx.lineTo(-4, -o.h); ctx.lineTo(4, -o.h); ctx.lineTo(4, -o.h + 12);
+    ctx.lineTo(o.w/2, -o.h + 12); ctx.lineTo(o.w/2, 0); ctx.closePath();
+    ctx.fillStyle = "#7ec8e3"; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#e8710a"; ctx.fillRect(-4, -o.h, 8, 6);
+  }else{
+    ctx.beginPath();
+    ctx.moveTo(-o.w/2, 0); ctx.lineTo(-o.w/4, -o.h); ctx.lineTo(o.w/3, -o.h + 4); ctx.lineTo(o.w/2, 0); ctx.closePath();
+    ctx.fillStyle = "#b8a888"; ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- main loop ---------- */
+function frame(ts){
+  const dt = Math.min(.05, tPrev ? (ts - tPrev)/1000 : 0); tPrev = ts;
+  speed += (targetSpeed() - speed) * Math.min(1, dt * 1.6);
+  wheelAngle += (tele.rpm * Math.PI * 2 / 60) * dt;
+
+  if(running){
+    you += speed * dt / 38;                       // pixels to "metres"
+    if(tele.status === "SPINNING") him += tele.speedMmS / 1000 * dt * 2.4;
+    player.vy += 2300 * dt; player.y += player.vy * dt;
+    if(player.y >= GROUND){ player.y = GROUND; player.vy = 0; player.onGround = true; }
+    player.legPhase += dt * (6 + speed / 42);
+    spawnIn -= speed * dt;
+    if(spawnIn <= 0){ spawnObstacle(); spawnIn = 300 + Math.random() * 330 + speed * .22; }
+    for(const o of obstacles) o.x -= speed * dt;
+    obstacles = obstacles.filter(o => o.x > -60);
+    for(const o of obstacles){
+      const px = player.x, py = player.y;
+      if(px + player.r - 8 > o.x - o.w/2 + 4 && px - player.r + 8 < o.x + o.w/2 - 4 &&
+         py + 26 > GROUND + 26 - o.h + 6){ gameOver(); break; }
+    }
+    $("hudYou").textContent = Math.floor(you) + " m";
+    $("hudHim").textContent = Math.floor(him) + " m";
+    const maxv = Math.max(50, you, him);
+    $("barYou").style.width = (you / maxv * 100) + "%";
+    $("barHim").style.width = (him / maxv * 100) + "%";
+    $("valYou").textContent = Math.floor(you) + " m";
+    $("valHim").textContent = Math.floor(him) + " m";
+  }
+
+  /* scene */
+  ctx.clearRect(0, 0, W, H);
+  for(const c of clouds){
+    c.x -= speed * dt * .12; if(c.x < -90) c.x = W + 90;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.scale(c.s, c.s);
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.arc(24, 4, 17, 0, Math.PI*2); ctx.arc(-24, 5, 15, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  for(const mte of motes){
+    mte.x -= speed * dt * .5; if(mte.x < 0) mte.x = W;
+    ctx.beginPath(); ctx.arc(mte.x, mte.y, mte.r, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(232,113,10,.35)"; ctx.fill();
+  }
+  drawWheel(W - 84, 76, 44);
+  // ground
+  ctx.fillStyle = "#e8cf9f"; ctx.fillRect(0, GROUND + 26, W, H - GROUND - 26);
+  ctx.strokeStyle = "#2b2118"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, GROUND + 26); ctx.lineTo(W, GROUND + 26); ctx.stroke();
+  ctx.strokeStyle = "rgba(43,33,24,.35)"; ctx.lineWidth = 2;
+  const off = (you * 38) % 46;
+  for(let x = -off; x < W; x += 46){ ctx.beginPath(); ctx.moveTo(x, GROUND + 44); ctx.lineTo(x + 22, GROUND + 44); ctx.stroke(); }
+  for(const o of obstacles) drawObstacle(o);
+  drawPlayer();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
